@@ -13,7 +13,7 @@ import tensorflow as tf
 VGG_MEAN = [103.939, 116.779, 123.68]
 
 
-class VGG_FCN_SMALL:
+class VGG_UNET_SMALL:
 
     def __init__(self, vgg16_npy_path=None):
         if vgg16_npy_path is None:
@@ -70,38 +70,46 @@ class VGG_FCN_SMALL:
                 rgb = tf.Print(rgb, [tf.shape(rgb)],
                                message='Shape of input image: ',
                                summarize=4, first_n=1)
-
+        #down1
         self.conv1_1 = self._conv_layer(rgb, "conv1_1")
         self.conv1_2 = self._conv_layer(self.conv1_1, "conv1_2")
-        self.pool1 = self._max_pool(self.conv1_2, 'pool1', debug)
 
+        #down2
+        self.pool1 = self._max_pool(self.conv1_2, 'pool1', debug)
         self.conv2_1 = self._conv_layer(self.pool1, "conv2_1")
         self.conv2_2 = self._conv_layer(self.conv2_1, "conv2_2")
-        self.pool2 = self._max_pool(self.conv2_2, 'pool2', debug)
 
+        #down3
+        self.pool2 = self._max_pool(self.conv2_2, 'pool2', debug)
         self.conv3_1 = self._conv_layer(self.pool2, "conv3_1")
         self.conv3_2 = self._conv_layer(self.conv3_1, "conv3_2")
-        self.conv3_3 = self._conv_layer(self.conv3_2, "conv3_3")
-        self.pool3 = self._max_pool(self.conv3_3, 'pool3', debug)
 
-        self.score_fr = self._score_layer(self.pool3,'score_fr',num_classes = 256)
+        #bottom
+        self.pool3 = self._max_pool(self.conv3_2, 'pool3', debug)
+        self.conv4_1 = self._conv3_layer(bottom= self.pool3,kernel_shape=[3,3,256,512],bias_shape=[512],name = 'conv4_1')
+        self.conv4_2 = self._conv3_layer(bottom = self.conv4_1,kernel_shape = [3,3,512,512],bias_shape = [512],name = 'conv4_2')
 
-        self.upscore2 = self._upscore_layer(self.score_fr,shape = tf.shape(self.pool2),num_classes=128, debug=debug,name = 'upscore2',ksize= 3, stride =2)
-        self.score_pool2 = self._score_layer(self.pool2,'score_pool2',num_classes = 128)
+        #up3
+        self.upscore3 = self._upscore_layer(self.conv4_2,shape = tf.shape(self.conv3_2),num_classes=256, debug=debug,name = 'upscore3',ksize= 2, stride =2)
+        self.fuse_layer3 = tf.concat([self.conv3_2,self.upscore3],axis = -1,name = "fuse_layer3")
+        print('++++++++++++++++++++++++++==fues_layer3 shape :',self.fuse_layer3.shape)
+        self.expand_conv3_1 = self._conv3_layer(self.fuse_layer3,[3,3,512,256],[256],name='expansive_conv3_1')
+        self.expand_conv3_2 = self._conv3_layer(self.expand_conv3_1, [3,3,256,256],[256],name = 'expansive_conv3_2')
 
+        #up2
+        self.upscore2 = self._upscore_layer(self.expand_conv3_2,shape = tf.shape(self.pool1),num_classes = 128,debug = debug,name = 'upscore2', ksize = 2,stride = 2)
+        self.fuse_layer2 = tf.concat([self.conv2_2,self.upscore2],axis = -1,name = "fuse_layer2")
+        self.expand_conv2_1 = self._conv3_layer(self.fuse_layer2,[3,3,256,128],[128],name = 'expansive_conv2_1')
+        self.expand_conv2_2 = self._conv3_layer(self.expand_conv2_1,[3,3,128,128],[128],name = 'expansive_conv2_2')
 
+        #up1
+        self.upscore1 = self._upscore_layer(self.expand_conv2_2,shape = tf.shape(self.conv1_2),num_classes = 64, debug = debug, name = 'upscore1',ksize = 2, stride =2)
+        self.fuse_layer1 = tf.concat([self.conv1_2,self.upscore1],axis =-1, name = 'fuse_layer1')
+        self.expand_conv1_1 = self._conv3_layer(self.fuse_layer1 ,[3,3,128,64],[64],name = 'expansive_conv1_1')
+        self.expand_conv1_2 = self._conv3_layer(self.expand_conv1_1, [3,3,64,32],[32],name = 'expansive_conv1_2')
 
-        self.fuse_pool2 = tf.add(self.upscore2, self.score_pool2)
-
-        self.upscore4 = self._upscore_layer(self.fuse_pool2,shape = tf.shape(self.pool1),num_classes =64,debug = debug,name = 'upscore4', ksize = 3,stride = 2)
-        self.score_pool1 = self._score_layer(self.pool1, 'score_pool1', num_classes = 64)
-        #widghted sum
-        self.fuse_pool1 = tf.add(self.upscore4 , self.score_pool1 )
-
-        self.score_fuse = self._score_layer(self.fuse_pool1, 'score_fuse',num_classes=32)
-
-        self.upscore8 = self._upscore_layer(self.score_fuse,shape = tf.shape(rgb), num_classes= 16, debug = debug, name = 'score_final', ksize = 3, stride = 2)
-        self.prediction = self._score_layer(self.upscore8,'prediction',num_classes = 3)
+        #output
+        self.prediction = self._score_layer(self.expand_conv1_2,'prediction',num_classes = 3)
         self.pred_img = tf.squeeze(self.prediction)
 
 
@@ -114,6 +122,20 @@ class VGG_FCN_SMALL:
                             message='Shape of %s' % name,
                             summarize=4, first_n=1)
         return pool
+
+    def _conv3_layer(self,bottom,kernel_shape,bias_shape,name):
+        with tf.variable_scope(name) as scope:
+            kernels = self._variable_with_weight_decay(shape=kernel_shape,stddev= 0.1,wd=self.wd)
+            conv = tf.nn.conv2d(input = bottom,filter = kernels,strides = [1,1,1,1],padding='SAME')
+            conv_biases = self._bias_variable (bias_shape)
+            bias = tf.nn.bias_add(conv,conv_biases)
+
+            relu = tf.nn.relu(bias)
+
+            _activation_summary(relu)
+        return relu
+
+
 
     def _conv_layer(self, bottom, name):
         with tf.variable_scope(name) as scope:
@@ -381,6 +403,7 @@ def _activation_summary(x):
     tensor_name = x.op.name
     # tensor_name = re.sub('%s_[0-9]*/' % TOWER_NAME, '', x.op.name)
     tf.summary.histogram(tensor_name + '/activations', x)
+
     tf.summary.scalar(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
 
 

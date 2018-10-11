@@ -73,24 +73,21 @@ class VGG_FCN_SMALL:
 
         self.conv1_1 = self._conv_layer(rgb, "conv1_1")
         self.conv1_2 = self._conv_layer(self.conv1_1, "conv1_2")
-        self.pool1 = self._max_pool(self.conv1_2, 'pool1', debug)
 
+        self.pool1 = self._max_pool(self.conv1_2, 'pool1', debug)
         self.conv2_1 = self._conv_layer(self.pool1, "conv2_1")
         self.conv2_2 = self._conv_layer(self.conv2_1, "conv2_2")
-        self.pool2 = self._max_pool(self.conv2_2, 'pool2', debug)
 
+        self.pool2 = self._max_pool(self.conv2_2, 'pool2', debug)
         self.conv3_1 = self._conv_layer(self.pool2, "conv3_1")
         self.conv3_2 = self._conv_layer(self.conv3_1, "conv3_2")
         self.conv3_3 = self._conv_layer(self.conv3_2, "conv3_3")
-        self.pool3 = self._max_pool(self.conv3_3, 'pool3', debug)
 
+        self.pool3 = self._max_pool(self.conv3_3, 'pool3', debug)
         self.score_fr = self._score_layer(self.pool3,'score_fr',num_classes = 256)
 
         self.upscore2 = self._upscore_layer(self.score_fr,shape = tf.shape(self.pool2),num_classes=128, debug=debug,name = 'upscore2',ksize= 3, stride =2)
         self.score_pool2 = self._score_layer(self.pool2,'score_pool2',num_classes = 128)
-
-
-
         self.fuse_pool2 = tf.add(self.upscore2, self.score_pool2)
 
         self.upscore4 = self._upscore_layer(self.fuse_pool2,shape = tf.shape(self.pool1),num_classes =64,debug = debug,name = 'upscore4', ksize = 3,stride = 2)
