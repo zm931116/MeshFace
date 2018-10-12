@@ -17,13 +17,13 @@ logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s',
                     level=logging.INFO,
                     stream=sys.stdout)
 
-result_dir = '../test_output/vgg_unet_initial'
+result_dir = '../test_output/vgg_unet18_epoch60'
 img_dir = '../../DATA/val_mesh_data'
 img_names = os.listdir(img_dir)
 
 #
-# model_path = '../models/vgg_fcn_smallX/'
-# print('##################checkpoint is :',tf.train.latest_checkpoint(model_path))
+model_path = '../models/vgg_unet18/'
+print('##################checkpoint is :',tf.train.latest_checkpoint(model_path))
 with tf.Session() as sess:
     images = tf.placeholder("float")
 
@@ -42,7 +42,7 @@ with tf.Session() as sess:
     init = tf.global_variables_initializer()
     sess.run(init)
     saver = tf.train.Saver()
-    #saver.restore(sess, tf.train.latest_checkpoint(model_path))
+    saver.restore(sess, tf.train.latest_checkpoint(model_path))
     print('Running the Network')
 
    # png_image = tf.image.encode_png
@@ -64,4 +64,6 @@ with tf.Session() as sess:
         result_path = os.path.join(result_dir, name)
         print(result_path)
         scp.misc.imsave(result_path, up)
-
+    forward_time = (time.time() - time0)
+    s_time = forward_time/50
+    print('total time %2.4f, single image time: %2.4f'%(forward_time,s_time))

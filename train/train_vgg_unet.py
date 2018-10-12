@@ -138,7 +138,7 @@ def train(train_dir, val_dir, max_epoch, model_path, log_dir, learning_rate,star
 
             prediction, _ = sess.run(fetches=train_fetches,
                                       feed_dict={input_holder: image_batch_array, target_holder: target_batch_array})
-            if (step ) % display == 0:
+            if (step ) % display == 0 and step > 100:
                 print('step--', step + 1)
                 print('time cost for last 100 steps:', time.time() - time0)
                 # print(prediction.shape)
@@ -155,7 +155,7 @@ def train(train_dir, val_dir, max_epoch, model_path, log_dir, learning_rate,star
 
 
 
-                #writer_val.add_summary(val_summary, global_step=step+1)
+                writer_val.add_summary(val_summary, global_step=step+1)
                     # print('validation!!')
                     # print(val_prediction.shape)
                 time_val1 = time.time() - time_val
@@ -201,6 +201,6 @@ if __name__ == '__main__':
     model_path = '../models/vgg_unet18/'
     log_dir = '../logs/vgg_unet18'
     val_log_dir = ''
-    train(train_dir=train_record_path,learning_rate = 1e-3, val_dir=val_tfrecord_path,start_epoch=0, max_epoch=10,
+    train(train_dir=train_record_path,learning_rate = 1e-4, val_dir=val_tfrecord_path,start_epoch=50, max_epoch=100,
           model_path=model_path, log_dir=log_dir,
-          display=10, from_scrach=True,save_interval=2)
+          display=100, from_scrach=False,save_interval=5)
